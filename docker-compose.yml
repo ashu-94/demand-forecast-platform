@@ -1,0 +1,79 @@
+# Four services, one image. `trainer` is a one-shot job that populates the
+# shared artifacts volume; `api` and `dashboard` wait for it via depends_on so
+# they don't boot against an empty model directory.
+
+x-common: &common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: demand-forecast-platform:latest
+  environment:
+    - PYTHONPATH=/app
+    - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI:-sqlite:////app/artifacts/mlflow.db}
+  volumes:
+    - artifacts:/app/artifacts
+    - data:/app/data
+
+services:
+  trainer:
+    <<: *common
+    container_name: dfp-trainer
+    command: >
+      sh -c "python -m src.data.generate_data &&
+             python -m src.features.build_features &&
+             python -m src.models.train &&
+             python -m scripts.run_optimization &&
+             python -m src.models.explain &&
+             (python -m scripts.run_monitoring || true)"
+    restart: "no"
+
+  api:
+    <<: *common
+    container_name: dfp-api
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      trainer:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  dashboard:
+    <<: *common
+    container_name: dfp-dashboard
+    command: >
+      streamlit run dashboard/app.py
+      --server.port=8501 --server.address=0.0.0.0 --server.headless=true
+    environment:
+      - PYTHONPATH=/app
+      - API_URL=http://api:8000
+    ports:
+      - "${DASHBOARD_PORT:-8501}:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mlflow:
+    <<: *common
+    container_name: dfp-mlflow
+    command: >
+      mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri sqlite:////app/artifacts/mlflow.db
+      --default-artifact-root /app/artifacts/mlruns
+    ports:
+      - "${MLFLOW_PORT:-5000}:5000"
+    depends_on:
+      trainer:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  artifacts:
+  data:

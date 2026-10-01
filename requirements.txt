@@ -1,0 +1,36 @@
+# Versions below are the ones the pipeline was actually built and validated on.
+# Pinned with `~=` so patch fixes flow through but minor bumps stay deliberate.
+
+# --- core ------------------------------------------------------------------
+numpy~=2.4.4
+pandas~=2.3.3
+scipy~=1.17.1
+# Streamlit 1.61 requires PyArrow <25.
+pyarrow~=24.0.0
+PyYAML~=6.0.3
+joblib~=1.5.3
+
+# --- modelling -------------------------------------------------------------
+scikit-learn~=1.8.0
+lightgbm~=4.7.0
+shap~=0.52.0
+matplotlib~=3.10.8
+
+# --- experiment tracking ---------------------------------------------------
+# NOTE: MLflow 3.x removed support for the ./mlruns file store. The tracking
+# URI in config/config.yaml is sqlite:///mlflow.db for local runs; point it at
+# Postgres in production.
+mlflow~=3.15.1
+
+# --- serving ---------------------------------------------------------------
+fastapi~=0.141.1
+uvicorn[standard]~=0.52.1
+pydantic~=2.13.4
+
+# --- dashboard -------------------------------------------------------------
+streamlit~=1.61.0
+plotly~=6.9.0
+
+# --- tests -----------------------------------------------------------------
+pytest~=9.1.1
+httpx~=0.28.1
